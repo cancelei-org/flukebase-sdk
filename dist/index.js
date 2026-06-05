@@ -38,21 +38,17 @@ const BOLT11_RE = /ln(?:bc|tb|bcrt)[0-9a-z]+/gi;
 export function redact(s) {
     return s.replace(BEARER_RE, "Bearer ***").replace(BOLT11_RE, "ln***");
 }
+// Resolution is total — it never throws. Missing token/fetch are reported at
+// request time, so `export const fb = createClient()` at module scope is safe
+// even when the build runs without env (the common Next.js footgun).
 function resolveConfig(c) {
-    const token = c.token ?? process.env.FLUKEBASE_API_TOKEN ?? process.env.FLUKEBASE_PAYMENT_TOKEN;
-    if (!token) {
-        throw new FlukebaseError("No FlukeBase token — set FLUKEBASE_API_TOKEN (or pass { token }).");
-    }
-    const f = c.fetch ?? globalThis.fetch;
-    if (!f) {
-        throw new FlukebaseError("No fetch available — pass { fetch } (Node < 18).");
-    }
+    const token = c.token ?? process.env.FLUKEBASE_API_TOKEN ?? process.env.FLUKEBASE_PAYMENT_TOKEN ?? "";
     return {
         baseUrl: (c.baseUrl ?? process.env.FLUKEBASE_API_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, ""),
         token,
         projectId: c.projectId ?? process.env.FLUKEBASE_PROJECT_ID,
-        webhookToken: c.webhookToken ?? process.env.FLUKEBASE_PAYMENT_TOKEN ?? token,
-        fetch: f,
+        webhookToken: c.webhookToken ?? process.env.FLUKEBASE_PAYMENT_TOKEN ?? token ?? undefined,
+        fetch: c.fetch ?? globalThis.fetch,
         retries: c.retries ?? DEFAULT_RETRIES,
         timeoutMs: c.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     };
@@ -72,13 +68,20 @@ class Transport {
         this.cfg = cfg;
     }
     async request(method, path, body) {
+        if (!this.cfg.token) {
+            throw new FlukebaseError("No FlukeBase token — set FLUKEBASE_API_TOKEN (or pass { token }).");
+        }
+        const doFetch = this.cfg.fetch;
+        if (!doFetch) {
+            throw new FlukebaseError("No fetch available — pass { fetch } (Node < 18).");
+        }
         const url = `${this.cfg.baseUrl}${path}`;
         let lastErr;
         for (let attempt = 0; attempt <= this.cfg.retries; attempt++) {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), this.cfg.timeoutMs);
             try {
-                const res = await this.cfg.fetch(url, {
+                const res = await doFetch(url, {
                     method,
                     headers: {
                         Authorization: `Bearer ${this.cfg.token}`,

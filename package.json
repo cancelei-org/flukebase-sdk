@@ -1,6 +1,6 @@
 {
   "name": "@flukebase/client",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Thin server-side client for the FlukeBase platform — email, Lightning payments, and MCP tools/call. One tested place for auth, retries, webhook verification, and secret redaction so tenants stop reimplementing (and re-bugging) the client.",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,7 +12,11 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "src", "README.md"],
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -20,8 +24,18 @@
     "test": "tsx --test tests/*.test.ts",
     "prepublishOnly": "npm run build"
   },
-  "keywords": ["flukebase", "email", "lightning", "payments", "mcp", "sdk", "client"],
-  "engines": { "node": ">=18" },
+  "keywords": [
+    "flukebase",
+    "email",
+    "lightning",
+    "payments",
+    "mcp",
+    "sdk",
+    "client"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",

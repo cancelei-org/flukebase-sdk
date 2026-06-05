@@ -47,12 +47,16 @@ test("redact removes bearer tokens and bolt11 invoices", () => {
   assert.match(s, /ln\*\*\*/);
 });
 
-test("createClient throws a clear error without a token", () => {
+test("construction is total; a request without a token throws clearly", async () => {
   const prev = { a: process.env.FLUKEBASE_API_TOKEN, b: process.env.FLUKEBASE_PAYMENT_TOKEN };
   delete process.env.FLUKEBASE_API_TOKEN;
   delete process.env.FLUKEBASE_PAYMENT_TOKEN;
   try {
-    assert.throws(() => createClient({ fetch: (async () => new Response("")) as unknown as typeof fetch }), FlukebaseError);
+    // Must NOT throw at construction — safe to do `export const fb = createClient()`
+    // at module scope even when the build runs without env.
+    const fb = createClient({ fetch: (async () => new Response("")) as unknown as typeof fetch });
+    // The token error surfaces only when a call is actually made.
+    await assert.rejects(() => fb.email.send({ from: "a@x", to: "b@x", subject: "s", text: "t" }), FlukebaseError);
   } finally {
     if (prev.a) process.env.FLUKEBASE_API_TOKEN = prev.a;
     if (prev.b) process.env.FLUKEBASE_PAYMENT_TOKEN = prev.b;

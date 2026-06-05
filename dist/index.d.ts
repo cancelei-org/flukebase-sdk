@@ -31,7 +31,7 @@ interface ResolvedConfig {
     token: string;
     projectId: string | undefined;
     webhookToken: string | undefined;
-    fetch: typeof fetch;
+    fetch: typeof fetch | undefined;
     retries: number;
     timeoutMs: number;
 }
