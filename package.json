@@ -1,6 +1,6 @@
 {
   "name": "@flukebase/client",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Thin server-side client for the FlukeBase platform — email, Lightning payments, and MCP tools/call. One tested place for auth, retries, webhook verification, and secret redaction so tenants stop reimplementing (and re-bugging) the client.",
   "type": "module",
   "main": "./dist/index.js",
@@ -9,7 +9,8 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "files": [
