@@ -1,0 +1,7 @@
+/node_modules
+*.tsbuildinfo
+.DS_Store
+npm-debug.log*
+.env
+.env.local
+# dist/ IS committed on tagged releases so git-dependency consumers don't build.
