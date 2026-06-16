@@ -16,6 +16,13 @@ export interface ClientConfig {
     token?: string;
     /** Default project for payments. Default: env FLUKEBASE_PROJECT_ID. */
     projectId?: string;
+    /** Default Mox account to authenticate email sends as (BYOK). Set this when
+     *  the sender's local part doesn't match its Mox account name (e.g.
+     *  noreply@tenant.com → account `tenant-noreply`), otherwise the platform's
+     *  local-part→account resolution falls back to a shared account that isn't
+     *  authorized for the address and Mox rejects with `badFrom`. Per-call
+     *  `account` overrides this. Default: env FLUKEBASE_EMAIL_ACCOUNT. */
+    emailAccount?: string;
     /** Token a settlement webhook will present (constant-time compared in
      *  verifyWebhook). Default: env FLUKEBASE_PAYMENT_TOKEN, then `token`. */
     webhookToken?: string;
@@ -30,6 +37,7 @@ interface ResolvedConfig {
     baseUrl: string;
     token: string;
     projectId: string | undefined;
+    emailAccount: string | undefined;
     webhookToken: string | undefined;
     fetch: typeof fetch | undefined;
     retries: number;
@@ -46,8 +54,11 @@ export interface SendEmailParams {
     subject: string;
     text: string;
     html?: string;
-    /** Optional Mox account for per-account (BYOK) auth. Usually omit — the
-     *  platform resolves the sender from `from`. */
+    /** Mox account to authenticate the send as (BYOK). Needed when the sender's
+     *  local part doesn't match its Mox account name (e.g. noreply@tenant.com →
+     *  account `tenant-noreply`); otherwise the platform falls back to a shared
+     *  account that isn't authorized for the address and Mox returns `badFrom`.
+     *  Defaults to the client's `emailAccount` / FLUKEBASE_EMAIL_ACCOUNT. */
     account?: string;
 }
 export interface SendTemplateParams {
@@ -56,18 +67,27 @@ export interface SendTemplateParams {
     subject: string;
     template: string;
     vars: Record<string, unknown>;
+    /** See SendEmailParams.account. */
+    account?: string;
 }
 export interface SentEmail {
     id: string;
     status: string;
 }
+/** Reduce a sender value to a bare email address. The Mox backend behind
+ *  /api/v1/email/send rejects the RFC-5322 display-name form
+ *  ("Vamos <noreply@vamoslocal.com>") with `badAddress` — only the bare
+ *  address is accepted. Idempotent on already-bare addresses. */
+export declare function normalizeFromAddress(from: string): string;
 declare class EmailApi {
     private readonly t;
-    constructor(t: Transport);
+    private readonly defaultAccount;
+    constructor(t: Transport, defaultAccount: string | undefined);
     /** Send a plain email via POST /api/v1/email/send. */
     send(p: SendEmailParams): Promise<SentEmail>;
     /** Send a templated email ({{var}} substitution) via /api/v1/email/send-template. */
     sendTemplate(p: SendTemplateParams): Promise<SentEmail>;
+    private withSender;
 }
 export interface CreateInvoiceParams {
     externalUserId: string;
