@@ -18,7 +18,8 @@ npm i github:cancelei-org/flukebase-sdk#v0.1.0
 ```ts
 import { createClient } from "@flukebase/client";
 
-// Reads FLUKEBASE_API_URL, FLUKEBASE_API_TOKEN, FLUKEBASE_PROJECT_ID from env by default.
+// Reads FLUKEBASE_API_URL, FLUKEBASE_API_TOKEN, FLUKEBASE_PROJECT_ID,
+// FLUKEBASE_EMAIL_ACCOUNT from env by default.
 const fb = createClient();
 
 // Email — POST /api/v1/email/send (the #511-fixed path)
@@ -29,6 +30,13 @@ await fb.email.send({
   text: "…",
   html: "<p>…</p>",
 });
+// `from` is auto-normalized to a bare address — the display-name form
+// ("Brand <no-reply@…>") is stripped here so Mox never rejects it with
+// `badAddress`. If your sender's local part doesn't match its Mox account name
+// (e.g. no-reply@… → account `tenant-noreply`), set the account once and every
+// send is authenticated correctly (avoids `badFrom`):
+//   createClient({ emailAccount: "tenant-noreply" })  // or FLUKEBASE_EMAIL_ACCOUNT
+// Per-call `account` overrides it.
 
 // Lightning payments
 const invoice = await fb.payments.createInvoice({

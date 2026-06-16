@@ -56,6 +56,13 @@ export interface ClientConfig {
   token?: string;
   /** Default project for payments. Default: env FLUKEBASE_PROJECT_ID. */
   projectId?: string;
+  /** Default Mox account to authenticate email sends as (BYOK). Set this when
+   *  the sender's local part doesn't match its Mox account name (e.g.
+   *  noreply@tenant.com → account `tenant-noreply`), otherwise the platform's
+   *  local-part→account resolution falls back to a shared account that isn't
+   *  authorized for the address and Mox rejects with `badFrom`. Per-call
+   *  `account` overrides this. Default: env FLUKEBASE_EMAIL_ACCOUNT. */
+  emailAccount?: string;
   /** Token a settlement webhook will present (constant-time compared in
    *  verifyWebhook). Default: env FLUKEBASE_PAYMENT_TOKEN, then `token`. */
   webhookToken?: string;
@@ -71,6 +78,7 @@ interface ResolvedConfig {
   baseUrl: string;
   token: string;
   projectId: string | undefined;
+  emailAccount: string | undefined;
   webhookToken: string | undefined;
   fetch: typeof fetch | undefined;
   retries: number;
@@ -86,6 +94,7 @@ function resolveConfig(c: ClientConfig): ResolvedConfig {
     baseUrl: (c.baseUrl ?? process.env.FLUKEBASE_API_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, ""),
     token,
     projectId: c.projectId ?? process.env.FLUKEBASE_PROJECT_ID,
+    emailAccount: c.emailAccount ?? process.env.FLUKEBASE_EMAIL_ACCOUNT,
     webhookToken: c.webhookToken ?? process.env.FLUKEBASE_PAYMENT_TOKEN ?? token ?? undefined,
     fetch: c.fetch ?? globalThis.fetch,
     retries: c.retries ?? DEFAULT_RETRIES,
@@ -185,8 +194,11 @@ export interface SendEmailParams {
   subject: string;
   text: string;
   html?: string;
-  /** Optional Mox account for per-account (BYOK) auth. Usually omit — the
-   *  platform resolves the sender from `from`. */
+  /** Mox account to authenticate the send as (BYOK). Needed when the sender's
+   *  local part doesn't match its Mox account name (e.g. noreply@tenant.com →
+   *  account `tenant-noreply`); otherwise the platform falls back to a shared
+   *  account that isn't authorized for the address and Mox returns `badFrom`.
+   *  Defaults to the client's `emailAccount` / FLUKEBASE_EMAIL_ACCOUNT. */
   account?: string;
 }
 
@@ -196,6 +208,8 @@ export interface SendTemplateParams {
   subject: string;
   template: string;
   vars: Record<string, unknown>;
+  /** See SendEmailParams.account. */
+  account?: string;
 }
 
 export interface SentEmail {
@@ -203,17 +217,43 @@ export interface SentEmail {
   status: string;
 }
 
+/** Reduce a sender value to a bare email address. The Mox backend behind
+ *  /api/v1/email/send rejects the RFC-5322 display-name form
+ *  ("Vamos <noreply@vamoslocal.com>") with `badAddress` — only the bare
+ *  address is accepted. Idempotent on already-bare addresses. */
+export function normalizeFromAddress(from: string): string {
+  const angle = from.match(/<([^>]+)>/);
+  return (angle ? angle[1]! : from).trim();
+}
+
 class EmailApi {
-  constructor(private readonly t: Transport) {}
+  constructor(
+    private readonly t: Transport,
+    private readonly defaultAccount: string | undefined,
+  ) {}
 
   /** Send a plain email via POST /api/v1/email/send. */
   send(p: SendEmailParams): Promise<SentEmail> {
-    return this.t.request<SentEmail>("POST", "/api/v1/email/send", p);
+    return this.t.request<SentEmail>("POST", "/api/v1/email/send", this.withSender(p));
   }
 
   /** Send a templated email ({{var}} substitution) via /api/v1/email/send-template. */
   sendTemplate(p: SendTemplateParams): Promise<SentEmail> {
-    return this.t.request<SentEmail>("POST", "/api/v1/email/send-template", p);
+    return this.t.request<SentEmail>("POST", "/api/v1/email/send-template", this.withSender(p));
+  }
+
+  // Cross-cutting Mox quirks handled once, for every tenant: the backend needs
+  // a BARE `from` address (rejects display names with `badAddress`) and infers
+  // the sending account from the `from` local part — falling back to a shared
+  // account that may be unauthorized for the address (`badFrom`). Normalize the
+  // address and pin the account here instead of in each tenant.
+  private withSender<T extends { from: string; account?: string }>(p: T): T {
+    const account = p.account ?? this.defaultAccount;
+    return {
+      ...p,
+      from: normalizeFromAddress(p.from),
+      ...(account ? { account } : {}),
+    };
   }
 }
 
@@ -370,7 +410,7 @@ export class FlukebaseClient {
   constructor(config: ClientConfig = {}) {
     const cfg = resolveConfig(config);
     const t = new Transport(cfg);
-    this.email = new EmailApi(t);
+    this.email = new EmailApi(t, cfg.emailAccount);
     this.payments = new PaymentsApi(t, cfg.projectId, cfg.webhookToken);
     this.mcp = new McpApi(t);
   }

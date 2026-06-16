@@ -47,6 +47,7 @@ function resolveConfig(c) {
         baseUrl: (c.baseUrl ?? process.env.FLUKEBASE_API_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, ""),
         token,
         projectId: c.projectId ?? process.env.FLUKEBASE_PROJECT_ID,
+        emailAccount: c.emailAccount ?? process.env.FLUKEBASE_EMAIL_ACCOUNT,
         webhookToken: c.webhookToken ?? process.env.FLUKEBASE_PAYMENT_TOKEN ?? token ?? undefined,
         fetch: c.fetch ?? globalThis.fetch,
         retries: c.retries ?? DEFAULT_RETRIES,
@@ -129,18 +130,41 @@ async function backoff(attempt) {
     const ms = Math.min(1000, 100 * 2 ** attempt);
     await new Promise((r) => setTimeout(r, ms));
 }
+/** Reduce a sender value to a bare email address. The Mox backend behind
+ *  /api/v1/email/send rejects the RFC-5322 display-name form
+ *  ("Vamos <noreply@vamoslocal.com>") with `badAddress` — only the bare
+ *  address is accepted. Idempotent on already-bare addresses. */
+export function normalizeFromAddress(from) {
+    const angle = from.match(/<([^>]+)>/);
+    return (angle ? angle[1] : from).trim();
+}
 class EmailApi {
     t;
-    constructor(t) {
+    defaultAccount;
+    constructor(t, defaultAccount) {
         this.t = t;
+        this.defaultAccount = defaultAccount;
     }
     /** Send a plain email via POST /api/v1/email/send. */
     send(p) {
-        return this.t.request("POST", "/api/v1/email/send", p);
+        return this.t.request("POST", "/api/v1/email/send", this.withSender(p));
     }
     /** Send a templated email ({{var}} substitution) via /api/v1/email/send-template. */
     sendTemplate(p) {
-        return this.t.request("POST", "/api/v1/email/send-template", p);
+        return this.t.request("POST", "/api/v1/email/send-template", this.withSender(p));
+    }
+    // Cross-cutting Mox quirks handled once, for every tenant: the backend needs
+    // a BARE `from` address (rejects display names with `badAddress`) and infers
+    // the sending account from the `from` local part — falling back to a shared
+    // account that may be unauthorized for the address (`badFrom`). Normalize the
+    // address and pin the account here instead of in each tenant.
+    withSender(p) {
+        const account = p.account ?? this.defaultAccount;
+        return {
+            ...p,
+            from: normalizeFromAddress(p.from),
+            ...(account ? { account } : {}),
+        };
     }
 }
 class PaymentsApi {
@@ -257,7 +281,7 @@ export class FlukebaseClient {
     constructor(config = {}) {
         const cfg = resolveConfig(config);
         const t = new Transport(cfg);
-        this.email = new EmailApi(t);
+        this.email = new EmailApi(t, cfg.emailAccount);
         this.payments = new PaymentsApi(t, cfg.projectId, cfg.webhookToken);
         this.mcp = new McpApi(t);
     }
