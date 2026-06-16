@@ -19,7 +19,8 @@ jobs:
       - run: npm run build
       - name: Verify committed dist is up to date
         run: |
-          git diff --exit-status -- dist || {
+          if [ -n "$(git status --porcelain -- dist)" ]; then
             echo "::error::dist/ is stale — run 'npm run build' and commit.";
+            git --no-pager diff -- dist;
             exit 1;
-          }
+          fi
