@@ -148,3 +148,46 @@ test("mcp.call unwraps the structured tool result", async () => {
   const out = await fb.mcp.call<{ ok: boolean; n: number }>("flukebase_whoami", {});
   assert.deepEqual(out, { ok: true, n: 7 });
 });
+
+// Save/restore the token env vars around a test so they don't leak between cases.
+function withTokenEnv(vars: Record<string, string | undefined>, fn: () => Promise<void>) {
+  const keys = ["FLUKEBASE_TOKEN", "FLUKEBASE_API_TOKEN", "FLUKEBASE_PAYMENT_TOKEN"] as const;
+  const prev: Record<string, string | undefined> = {};
+  for (const k of keys) {
+    prev[k] = process.env[k];
+    if (vars[k] === undefined) delete process.env[k];
+    else process.env[k] = vars[k];
+  }
+  return fn().finally(() => {
+    for (const k of keys) {
+      if (prev[k] === undefined) delete process.env[k];
+      else process.env[k] = prev[k];
+    }
+  });
+}
+
+test("resolves the bearer from canonical FLUKEBASE_TOKEN over legacy env names", async () => {
+  await withTokenEnv(
+    { FLUKEBASE_TOKEN: "canonical-tok", FLUKEBASE_API_TOKEN: "legacy-api", FLUKEBASE_PAYMENT_TOKEN: "legacy-pay" },
+    async () => {
+      const { f, calls } = mockFetch([{ body: { id: "m", status: "sent" } }]);
+      const fb = createClient({ baseUrl: "https://api.test", fetch: f }); // no explicit token
+      await fb.email.send({ from: "a@x", to: "b@x", subject: "s", text: "t" });
+      const headers = calls[0]!.init.headers as Record<string, string>;
+      assert.equal(headers["Authorization"], "Bearer canonical-tok");
+    },
+  );
+});
+
+test("falls back to legacy FLUKEBASE_API_TOKEN when FLUKEBASE_TOKEN is unset", async () => {
+  await withTokenEnv(
+    { FLUKEBASE_TOKEN: undefined, FLUKEBASE_API_TOKEN: "legacy-api", FLUKEBASE_PAYMENT_TOKEN: "legacy-pay" },
+    async () => {
+      const { f, calls } = mockFetch([{ body: { id: "m", status: "sent" } }]);
+      const fb = createClient({ baseUrl: "https://api.test", fetch: f });
+      await fb.email.send({ from: "a@x", to: "b@x", subject: "s", text: "t" });
+      const headers = calls[0]!.init.headers as Record<string, string>;
+      assert.equal(headers["Authorization"], "Bearer legacy-api");
+    },
+  );
+});
