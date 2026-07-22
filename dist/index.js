@@ -42,7 +42,11 @@ export function redact(s) {
 // request time, so `export const fb = createClient()` at module scope is safe
 // even when the build runs without env (the common Next.js footgun).
 function resolveConfig(c) {
-    const token = c.token ?? process.env.FLUKEBASE_API_TOKEN ?? process.env.FLUKEBASE_PAYMENT_TOKEN ?? "";
+    const token = c.token ??
+        process.env.FLUKEBASE_TOKEN ??
+        process.env.FLUKEBASE_API_TOKEN ??
+        process.env.FLUKEBASE_PAYMENT_TOKEN ??
+        "";
     return {
         baseUrl: (c.baseUrl ?? process.env.FLUKEBASE_API_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, ""),
         token,
@@ -70,7 +74,7 @@ class Transport {
     }
     async request(method, path, body) {
         if (!this.cfg.token) {
-            throw new FlukebaseError("No FlukeBase token — set FLUKEBASE_API_TOKEN (or pass { token }).");
+            throw new FlukebaseError("No FlukeBase token — set FLUKEBASE_TOKEN (or pass { token }).");
         }
         const doFetch = this.cfg.fetch;
         if (!doFetch) {
@@ -287,7 +291,8 @@ export class FlukebaseClient {
     }
 }
 /** Create a FlukeBase client. With no args it reads FLUKEBASE_API_URL /
- *  FLUKEBASE_API_TOKEN / FLUKEBASE_PROJECT_ID from the environment. */
+ *  FLUKEBASE_TOKEN (or legacy FLUKEBASE_API_TOKEN) / FLUKEBASE_PROJECT_ID
+ *  from the environment. */
 export function createClient(config = {}) {
     return new FlukebaseClient(config);
 }

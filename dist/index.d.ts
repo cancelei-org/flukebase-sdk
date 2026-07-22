@@ -12,7 +12,7 @@ export declare function redact(s: string): string;
 export interface ClientConfig {
     /** Platform base URL. Default: env FLUKEBASE_API_URL or https://mcp.flukebase.me */
     baseUrl?: string;
-    /** Bearer token. Default: env FLUKEBASE_API_TOKEN or FLUKEBASE_PAYMENT_TOKEN. */
+    /** Bearer token. Default: env FLUKEBASE_TOKEN (canonical), then legacy FLUKEBASE_API_TOKEN / FLUKEBASE_PAYMENT_TOKEN. */
     token?: string;
     /** Default project for payments. Default: env FLUKEBASE_PROJECT_ID. */
     projectId?: string;
@@ -140,7 +140,8 @@ export declare class FlukebaseClient {
     constructor(config?: ClientConfig);
 }
 /** Create a FlukeBase client. With no args it reads FLUKEBASE_API_URL /
- *  FLUKEBASE_API_TOKEN / FLUKEBASE_PROJECT_ID from the environment. */
+ *  FLUKEBASE_TOKEN (or legacy FLUKEBASE_API_TOKEN) / FLUKEBASE_PROJECT_ID
+ *  from the environment. */
 export declare function createClient(config?: ClientConfig): FlukebaseClient;
 export {};
 //# sourceMappingURL=index.d.ts.map
