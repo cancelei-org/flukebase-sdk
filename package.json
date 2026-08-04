@@ -1,7 +1,7 @@
 {
   "name": "@flukebase/client",
   "version": "0.2.1",
-  "description": "Thin server-side client for the FlukeBase platform — email, Lightning payments, and MCP tools/call. One tested place for auth, retries, webhook verification, and secret redaction so tenants stop reimplementing (and re-bugging) the client.",
+  "description": "Thin server-side client for the FlukeBase platform \u2014 email, Lightning payments, and MCP tools/call. One tested place for auth, retries, webhook verification, and secret redaction so tenants stop reimplementing (and re-bugging) the client.",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -46,5 +46,9 @@
     "@types/node": "^20",
     "tsx": "^4.21.0",
     "typescript": "^5"
+  },
+  "publishConfig": {
+    "registry": "https://npm.flukebase.me/",
+    "access": "public"
   }
 }
