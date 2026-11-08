@@ -277,17 +277,65 @@ export function verifyBearer(authorizationHeader, expected) {
         return false;
     return timingSafeEqual(a, b);
 }
+export class MemoryApi {
+    mcp;
+    projectId;
+    constructor(mcp, projectId) {
+        this.mcp = mcp;
+        this.projectId = projectId;
+    }
+    /** Recall relevant bitemporal memories scoped by tenant/project */
+    async recall(query, options = {}) {
+        const pid = options.projectId ?? this.projectId;
+        return this.mcp.call("flukebase_recall", {
+            query,
+            project_id: pid,
+            tag: options.tag,
+            limit: options.limit ?? 10,
+        });
+    }
+    /** Store a memory entry with optional categorization */
+    async remember(content, options = {}) {
+        const pid = options.projectId ?? this.projectId;
+        return this.mcp.call("flukebase_remember", {
+            content,
+            project_id: pid,
+            memory_type: options.memoryType ?? "fact",
+            tags: options.tags ?? [],
+        });
+    }
+}
+export class A2AApi {
+    mcp;
+    constructor(mcp) {
+        this.mcp = mcp;
+    }
+    /** Send an Agent-to-Agent message */
+    async sendMessage(msg) {
+        return this.mcp.call("flukebase_project_message_send", {
+            tenant_id: msg.tenantId,
+            from_agent: msg.fromAgent,
+            to_agent: msg.toAgent,
+            message_type: msg.type,
+            payload: msg.payload,
+        });
+    }
+}
 // ─── Client ──────────────────────────────────────────────────────────────────
 export class FlukebaseClient {
     email;
     payments;
     mcp;
+    memory;
+    a2a;
     constructor(config = {}) {
         const cfg = resolveConfig(config);
         const t = new Transport(cfg);
         this.email = new EmailApi(t, cfg.emailAccount);
         this.payments = new PaymentsApi(t, cfg.projectId, cfg.webhookToken);
         this.mcp = new McpApi(t);
+        this.memory = new MemoryApi(this.mcp, cfg.projectId);
+        this.a2a = new A2AApi(this.mcp);
     }
 }
 /** Create a FlukeBase client. With no args it reads FLUKEBASE_API_URL /

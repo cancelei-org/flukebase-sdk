@@ -133,10 +133,44 @@ declare class McpApi {
 }
 /** Constant-time bearer comparison. Returns false on any length/format mismatch. */
 export declare function verifyBearer(authorizationHeader: string | null | undefined, expected: string | undefined): boolean;
+export interface A2AMessage<T = Record<string, unknown>> {
+    id: string;
+    tenantId: string;
+    fromAgent: string;
+    toAgent: string;
+    type: string;
+    payload: T;
+    createdAt?: string;
+}
+export declare class MemoryApi {
+    private readonly mcp;
+    private readonly projectId?;
+    constructor(mcp: McpApi, projectId?: string | undefined);
+    /** Recall relevant bitemporal memories scoped by tenant/project */
+    recall(query: string, options?: {
+        projectId?: string;
+        tag?: string;
+        limit?: number;
+    }): Promise<unknown>;
+    /** Store a memory entry with optional categorization */
+    remember(content: string, options?: {
+        projectId?: string;
+        memoryType?: string;
+        tags?: string[];
+    }): Promise<unknown>;
+}
+export declare class A2AApi {
+    private readonly mcp;
+    constructor(mcp: McpApi);
+    /** Send an Agent-to-Agent message */
+    sendMessage(msg: A2AMessage): Promise<unknown>;
+}
 export declare class FlukebaseClient {
     readonly email: EmailApi;
     readonly payments: PaymentsApi;
     readonly mcp: McpApi;
+    readonly memory: MemoryApi;
+    readonly a2a: A2AApi;
     constructor(config?: ClientConfig);
 }
 /** Create a FlukeBase client. With no args it reads FLUKEBASE_API_URL /
