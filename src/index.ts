@@ -405,12 +405,67 @@ export function verifyBearer(
   return timingSafeEqual(a, b);
 }
 
+// ─── A2A & Memory API ────────────────────────────────────────────────────────
+
+export interface A2AMessage<T = Record<string, unknown>> {
+  id: string;
+  tenantId: string;
+  fromAgent: string;
+  toAgent: string;
+  type: string;
+  payload: T;
+  createdAt?: string;
+}
+
+export class MemoryApi {
+  constructor(private readonly mcp: McpApi, private readonly projectId?: string) {}
+
+  /** Recall relevant bitemporal memories scoped by tenant/project */
+  async recall(query: string, options: { projectId?: string; tag?: string; limit?: number } = {}): Promise<unknown> {
+    const pid = options.projectId ?? this.projectId;
+    return this.mcp.call("flukebase_recall", {
+      query,
+      project_id: pid,
+      tag: options.tag,
+      limit: options.limit ?? 10,
+    });
+  }
+
+  /** Store a memory entry with optional categorization */
+  async remember(content: string, options: { projectId?: string; memoryType?: string; tags?: string[] } = {}): Promise<unknown> {
+    const pid = options.projectId ?? this.projectId;
+    return this.mcp.call("flukebase_remember", {
+      content,
+      project_id: pid,
+      memory_type: options.memoryType ?? "fact",
+      tags: options.tags ?? [],
+    });
+  }
+}
+
+export class A2AApi {
+  constructor(private readonly mcp: McpApi) {}
+
+  /** Send an Agent-to-Agent message */
+  async sendMessage(msg: A2AMessage): Promise<unknown> {
+    return this.mcp.call("flukebase_project_message_send", {
+      tenant_id: msg.tenantId,
+      from_agent: msg.fromAgent,
+      to_agent: msg.toAgent,
+      message_type: msg.type,
+      payload: msg.payload,
+    });
+  }
+}
+
 // ─── Client ──────────────────────────────────────────────────────────────────
 
 export class FlukebaseClient {
   readonly email: EmailApi;
   readonly payments: PaymentsApi;
   readonly mcp: McpApi;
+  readonly memory: MemoryApi;
+  readonly a2a: A2AApi;
 
   constructor(config: ClientConfig = {}) {
     const cfg = resolveConfig(config);
@@ -418,6 +473,8 @@ export class FlukebaseClient {
     this.email = new EmailApi(t, cfg.emailAccount);
     this.payments = new PaymentsApi(t, cfg.projectId, cfg.webhookToken);
     this.mcp = new McpApi(t);
+    this.memory = new MemoryApi(this.mcp, cfg.projectId);
+    this.a2a = new A2AApi(this.mcp);
   }
 }
 
